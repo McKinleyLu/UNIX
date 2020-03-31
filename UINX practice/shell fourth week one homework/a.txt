@@ -1,0 +1,93 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<sys/types.h>
+#include<dirent.h>
+#include<sys/stat.h>
+#include<unistd.h>
+#include<string.h>
+#define N_BITS 3
+typedef struct links{
+    char d_name[256];
+    struct links *next;
+}dirlnk;
+typedef struct item_info{
+   unsigned long inode;
+   char permisson[11];
+   int owner;
+   int group;
+   off_t size;
+   time_t mod_time;
+   char name[256];
+}info;
+
+dirlnk* get_dir_detail(char *dirname)
+{
+    DIR*dir;
+    struct dirent *dire;
+    dirlnk *dir_head = NULL;
+    dirlnk *cur_item = NULL;       
+    dir = opendir(dirname);
+    if(dir == NULL)  {printf("open fail\n"); exit(-1);}
+    while(1)
+    {
+       dire = readdir(dir);
+       if(dire == NULL)  {break;}
+       else
+       {
+           if( strcmp(dire->d_name,".") == 0 || strcmp(dire->d_name,"..") == 0 ) {continue;}
+           dirlnk *tmp = (dirlnk*)malloc(sizeof(link));
+           strcpy(tmp->d_name,dire->d_name);
+           tmp->next = NULL;
+           if(dir_head == NULL)  {dir_head = tmp ;  cur_item = tmp;}
+           else                 {cur_item->next = tmp; cur_item = tmp ; }
+       }
+
+    }
+    cur_item->next = NULL;
+    //printf("%s\n",dir_head->next->next->d_name) ;
+   return dir_head;
+}
+void printf_file_info(dirlnk *dir_head)
+{
+  static char *perm[] = {"---","--x","-w-","-wx","r--","r-x","rw-","rwx"};
+  unsigned int mask = 0700;
+  struct stat *file_stat;
+  dirlnk *cur_dir = dir_head;
+  info file_info;
+  while(1)
+  {
+    if(cur_dir == NULL)   {break;}
+    else
+   {
+       mask = 0700;
+      if(!stat(cur_dir->d_name,file_stat))
+      {
+         printf("current d_name is wrong!\n");
+         cur_dir = cur_dir->next;
+         continue;
+      }
+    }
+    if(S_ISREG(file_stat->st_mode)) {file_info.permisson[0] = '-';}
+    if(S_ISDIR(file_stat->st_mode)) {file_info.permisson[0] = 'd';}
+    int i = 3 , j = 0;
+    while(i > 0)
+    {
+
+       file_info.permisson[1+j*3] = perm[ (file_stat->st_mode &mask) >> (i-1)*N_BITS][0];
+       j++;
+       i--;
+       mask >>= N_BITS;
+    }
+    printf("%ld %s %ld %d %d %ld %ld %s\n",file_stat->st_ino,file_info.permisson,file_stat->st_blocks,file_stat->st_uid,file_stat->st_gid,file_stat->st_size,file_stat->st_mtime,cur_dir->d_name) ;   
+    cur_dir = cur_dir->next;
+  }
+}
+int main()
+{
+    char *dirname = NULL;
+    dirname = getcwd(NULL,0);
+    dirlnk *p ;
+    p = get_dir_detail(dirname);
+    printf_file_info(p);
+  return 0 ;
+}
